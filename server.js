@@ -3,12 +3,10 @@ import GameServer from "./src/GameServer.js";
 
 const require = createRequire(import.meta.url);
 const http = require("http");
-const fs = require('fs')
 
 const { Server } = require("socket.io");
 
-const host = '178.19.246.11';
-const port = 9001;
+const port = 3000;
 
 const requestListener = function (req, res) {
     res.writeHead(200);
@@ -17,7 +15,7 @@ const requestListener = function (req, res) {
 const server = http.createServer(requestListener);
 const io = new Server(server, { cors: { origin: '*' } });
 
-server.listen(port, host, () => {
+server.listen(port,() => {
     console.log(`Server is running on http://${host}:${port}`);
 });
 
