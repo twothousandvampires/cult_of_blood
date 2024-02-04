@@ -16,7 +16,7 @@ const server = http.createServer(requestListener);
 const io = new Server(server, { cors: { origin: '*' } });
 
 server.listen(port,() => {
-    console.log(`Server is running on http://${host}:${port}`);
+    console.log(`Server is running on :${port}`);
 });
 
 let Game = new GameServer(io)
