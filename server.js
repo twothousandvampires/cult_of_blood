@@ -2,7 +2,7 @@ import {createRequire} from "module";
 import GameServer from "./src/GameServer.js";
 
 const require = createRequire(import.meta.url);
-const http = require("http");
+const https = require("https");
 
 const { Server } = require("socket.io");
 
@@ -12,7 +12,7 @@ const requestListener = function (req, res) {
     res.writeHead(200);
 };
 
-const server = http.createServer(requestListener);
+const server = https.createServer(requestListener);
 const io = new Server(server, { cors: { origin: '*' } });
 
 server.listen(port,() => {
