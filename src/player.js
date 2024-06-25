@@ -1,61 +1,164 @@
+import Functions from "./Functions.js";
+import e from "express";
+
 export default class Player{
 
-    static RADIUS = 0.3
-    constructor(socket_id, nick, skin) {
+    static RADIUS = 0.15
+    static STATE_DEAD = 4
+    static STATE_IDLE = 1
+    static STATE_MOVE = 2
+    static GAME_STATE_WEAPON = 1
+    static GAME_STATE_CASTING = 2
+
+    static DEFAULT_MIN_DISTANCE = 1
+    static DEFAULT_MAX_DISTANCE = 5
+    static WEAPON_SWORD = 1
+    constructor(socket_id, nick, skin, weapon = Player.WEAPON_SWORD) {
+        this.radius = 0.2
         this.socket_id = socket_id
         this.x = 5
         this.y = 5
         this.angle = 0
         this.nick = nick
-        this.ready = false
         this.hp = 100
-        this.state = 1
+        this.state = Player.STATE_IDLE
         this.texture_id = skin
-        this.attack = false
+        this.is_attack = false
         this.in_block = false
         this.movement_speed = 0.04
-        this.armour = 100
+        this.energy = 100
         this.ammo = 10
         this.move_back = false
         this.kills = 0
         this.power = 0
+        this.game_state = Player.GAME_STATE_WEAPON
+        this.weapon = weapon
+        this.change_state_cd = false
+        this.is_special = false
+        this.min_distance = Player.DEFAULT_MIN_DISTANCE
+        this.max_distance = Player.DEFAULT_MAX_DISTANCE
     }
-    revive(){
-        this.state = 1
+    revive(map, players){
+        this.state = Player.STATE_IDLE
         this.hp = 100
-        this.x = 5
-        this.y = 5
         this.angle = 0
-        this.armour = 100
+        this.energy = 100
         this.ammo = 10
-        this.attack = false
+        this.is_attack = false
         this.in_block = false
         this.movement_speed = 0.04
         this.move_back = false
         this.power = 0
+        this.is_special = false
+        this.calcPosition(map, players)
     }
-    calcPosition(index){
-        switch (index){
-            case 0:
-                this.x = 5
-                this.y = 5
-            break;
-            case 1:
-                this.x = 4
-                this.y = 4
-                break;
-            case 2:
-                break;
-            case 3:
-                break;
+    changeGameState(socket){
+        if(this.change_state_cd) return
+        if(this.game_state === Player.GAME_STATE_WEAPON && !this.spell) return;
+        if(this.is_special) return;
+
+        if(this.game_state === Player.GAME_STATE_WEAPON){
+            this.game_state = Player.GAME_STATE_CASTING
+            socket.emit('set_cast_mode', this.spell)
+
         }
+        else {
+            this.game_state = Player.GAME_STATE_WEAPON
+            socket.emit('set_weapon_mode', this.weapon)
+        }
+        this.is_attack = false
+        this.in_block = false
+        this.is_special = false
+
+        this.change_state_cd = true
+        this.energy -= 5
+        if(this.energy < 0){
+            this.energy = 0
+        }
+        setTimeout(()=>{
+            this.change_state_cd = false
+        }, 1500)
+}
+
+    calcPosition(map, players){
+        players = Object.values(players)
+        let spots = map.respawn_spots
+        let available = []
+        spots.forEach(spot => {
+            let empty = players.every(player => {
+                return !Functions.circleCollision(player, spot, Player.RADIUS * 2)
+            })
+            if(empty){
+                available.push(spot)
+            }
+        })
+        let spot = available[Math.floor(Math.random() * available.length)]
+        this.x = spot.x
+        this.y = spot.y
     }
     newSpell(spell){
         this.spell = spell
     }
     isDead(){
-        return this.state === 4
+        return this.state === Player.STATE_DEAD
     }
+    startSpecial(){
+        if(this.is_special) return
+
+        this.is_special = true
+        if(this.game_state === Player.GAME_STATE_CASTING){
+
+        }
+        else {
+            switch (this.weapon){
+                case Player.WEAPON_SWORD:
+                    this.in_block = true
+                    this.movement_speed -= 0.02
+                    break
+            }
+        }
+    }
+
+    endSpecial(game){
+        if(!this.is_special) return
+
+        this.is_special = false
+
+
+
+        if(this.game_state === Player.GAME_STATE_CASTING){
+            if(this.spell.special_end !== undefined){
+                this.spell.special_end(game)
+            }
+        }
+        else {
+            switch (this.weapon){
+                case Player.WEAPON_SWORD:
+                    this.in_block = false
+                    this.movement_speed += 0.02
+                    break
+            }
+        }
+    }
+    specialCast(game){
+        if(!this.spell) return
+        if(!this.spell.isSpecialEnoughEnergy(this)) return
+
+        this.spell.special(game, this)
+    }
+
+    energyRegen(){
+        this.energy += 3
+        if(this.energy > 100) this.energy = 100
+    }
+
+    cast(game){
+        if(!this.spell) return
+        if(!this.spell.isEnoughEnergy(this)) return
+
+        this.spell.cast(game, this)
+    }
+
     update(d, game){
         this.angle += d.da
         if(this.angle > 360) this.angle -= 360
@@ -69,7 +172,7 @@ export default class Player{
         for(let i = 0; i < back_players.length; i++){
 
             let b_player = back_players[i]
-            if(b_player === this) continue
+            if(b_player === this || b_player.isDead()) continue
 
             let check_x = Math.sqrt(Math.pow(new_x - b_player.x, 2) + Math.pow( this.y - b_player.y, 2))
             let check_y = Math.sqrt(Math.pow(this.x - b_player.x, 2) + Math.pow(new_y - b_player.y, 2))
@@ -83,23 +186,10 @@ export default class Player{
         }
 
         if(!d.dx && !d.dy){
-            this.state = 1
+            this.state = Player.STATE_IDLE
         }
         else {
-            this.state = 2
-        }
-
-        if(d.q && this.armour > 0){
-            if(!this.in_block){
-                this.in_block = true
-                this.movement_speed -= 0.02
-            }
-        }
-        else {
-            if(this.in_block){
-                this.in_block = false
-                this.movement_speed += 0.02
-            }
+            this.state = Player.STATE_MOVE
         }
 
         if(d.move_back){
@@ -119,5 +209,81 @@ export default class Player{
 
         this.x += d.dx
         this.y += d.dy
+    }
+    getWeaponDamage(){
+        switch (this.weapon){
+            case Player.WEAPON_SWORD:
+                return 12 + Math.round(this.power) / 2
+                break
+        }
+    }
+
+    weaponHit(game, player){
+        if(this.isDead()) return
+        // todo add player power
+        let damage = player.getWeaponDamage()
+        let angle = player.angle
+        let weapon = player.weapon
+
+
+        if(this.energy > 0 && this.in_block && Functions.checkAngleDiffForBlock(this.angle, angle)){
+
+            if(this.move_back){
+                damage = Math.round(damage * 0.8)
+            }
+
+            this.energy -= damage
+            if(this.energy >= 0){
+                game.createModal(player.socket_id, 'yellow', 'Block!')
+                return
+            }
+
+            damage = this.energy * -1
+            this.energy = 0
+        }
+
+        this.hp -= damage
+        if(this.hp <= 0){
+            this.state = Player.STATE_DEAD
+            if(player.socket_id !== this.socket_id){
+                player.kills ++
+            }
+            game.io.to(this.socket_id).emit('dead')
+            game.io.sockets.emit('update_leaderboard', game.players)
+
+            let p_nick = game.getPlayer(player.socket_id).nick
+            game.io.sockets.emit('update_log', p_nick + ' killed ' + this.nick)
+        }
+    }
+
+    spellHit(game, player, damage, angle){
+        if(this.isDead()) return
+
+        damage = damage
+
+        if(this.energy > 0 && this.in_block && Functions.checkAngleDiffForBlock(this.angle, angle)){
+
+            this.energy -= damage
+            if(this.energy >= 0){
+                // game.createModal(player.socket_id, 'yellow', 'Block!')
+                return
+            }
+
+            damage = this.energy * -1
+            this.energy = 0
+        }
+
+        this.hp -= damage
+        if(this.hp <= 0){
+            this.state = Player.STATE_DEAD
+            if(player.socket_id !== this.socket_id){
+                player.kills ++
+            }
+            game.io.to(this.socket_id).emit('dead')
+            game.io.sockets.emit('update_leaderboard', game.players)
+
+            let p_nick = game.getPlayer(player.socket_id).nick
+            game.io.sockets.emit('update_log', p_nick + ' killed ' + this.nick)
+        }
     }
 }

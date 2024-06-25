@@ -8,7 +8,7 @@ export default class Map{
     }
     getPossiblePowerUpSpot(currentPowerUps){
         let result = []
-        this.powerUpSpots.forEach(spot => {
+        this.power_up_spots.forEach(spot => {
             if(!currentPowerUps.find(current => current.x === spot.x && current.y === spot.y)){
                 result.push(spot)
             }
