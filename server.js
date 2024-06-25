@@ -6,7 +6,7 @@ const http = require("http");
 
 const { Server } = require("socket.io");
 
-const port = 3000;
+const port = 9001;
 
 const requestListener = function (req, res) {
     res.writeHead(200);

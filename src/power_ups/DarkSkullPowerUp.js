@@ -7,7 +7,8 @@ export default class DarkSkullPowerUp extends PowerUp{
         this.texture_id = 'dark_skull_pu'
         this.id = 'pu' + Math.floor(Math.random() * 1000000)
     }
-    pickUp(player){
+    pickUp(player, io){
         player.newSpell(new DarkSkullSpell())
+        io.sockets.to(player.socket_id).emit('update_spell', player.spell)
     }
 }

@@ -18,8 +18,9 @@ export default class GameServer{
     }
     addNewPlayer(nick, skin, socket_id){
         let player = new Player(socket_id, nick, skin)
-        player.calcPosition(this.players_count)
+        player.calcPosition(this.map, this.players)
         this.players[socket_id] = player
+        return player
     }
     removePlayer(socket_id){
         this.players_count--
@@ -30,19 +31,33 @@ export default class GameServer{
     }
     init(){
         this.io.on('connection', (socket) => {
-            console.log("!!")
-            socket.emit('update_map', this.map.getLayout())
-            let role = this.getRoleForNewPlayer()
-            socket.emit('get_role', role)
+            socket.on('get_role', () => {
+                let role = this.getRoleForNewPlayer()
+                socket.emit('set_role', role, socket.id)
+            })
 
             socket.on('init', (nick, skin)=>{
-                this.addNewPlayer(nick, skin, socket.id)
+                let player = this.addNewPlayer(nick, skin, socket.id)
                 this.io.sockets.emit('update_leaderboard', this.players)
+                this.io.sockets.emit('update_log', nick + ' joined to the game')
+                socket.emit('update_map', this.map)
                 socket.emit('update_power_ups', this.power_ups)
+                socket.emit('set_weapon_mode', player.weapon)
             })
 
             socket.on('hit_player', (socket_id) => {
-                this.hitPlayer(socket.id, socket_id, this.players[socket.id].angle)
+                let player_to_hit = this.getPlayer(socket_id)
+                let player = this.getPlayer(socket.id)
+                if(player && player_to_hit){
+                    player_to_hit.weaponHit(this, player)
+                }
+            })
+
+            socket.on('change_game_state', () => {
+                let player = this.getPlayer(socket.id)
+                if (!player) return
+
+                player.changeGameState(socket)
             })
 
             socket.on("disconnect", () => {
@@ -55,20 +70,42 @@ export default class GameServer{
                 let player = this.getPlayer(socket.id)
                 if (!player) return
 
-                player.attack = true
+                player.is_attack = true
             })
+
+            socket.on('start_special', () => {
+                let player = this.getPlayer(socket.id)
+                if (!player) return
+
+                player.startSpecial()
+            })
+
+            socket.on('end_special', () => {
+                let player = this.getPlayer(socket.id)
+                if (!player) return
+
+                player.endSpecial(this)
+            })
+
+            socket.on('special_cast', () => {
+                let player = this.getPlayer(socket.id)
+                if (!player) return
+
+                player.specialCast(this)
+            })
+
             socket.on('end_attack', () => {
                 let player = this.getPlayer(socket.id)
                 if (!player) return
 
-                player.attack = false
+                player.is_attack = false
             })
 
             socket.on('revive', () => {
                 let player = this.getPlayer(socket.id)
                 if (!player) return
 
-                player.revive()
+                player.revive(this.map, this.players)
             })
 
             socket.on('inputs', (d) => {
@@ -97,19 +134,18 @@ export default class GameServer{
             })
 
             socket.on('cast', () => {
+
                 const player = this.getPlayer(socket.id)
 
                 if (!player) return
-                if(!player.spell || !player.spell.count) return
 
-                player.spell.count --
-                player.spell.cast(this, player)
+                player.cast(this)
             })
 
         })
     }
     generatePowerUp(){
-        if(this.power_ups.length < this.map.powerUpSpots.length){
+        if(this.power_ups.length < this.map.power_up_spots.length){
             let spot = this.map.getPossiblePowerUpSpot(this.power_ups)
 
             let power_up = PowerUpCreator.createRandom()
@@ -122,11 +158,17 @@ export default class GameServer{
             this.io.sockets.emit('update_power_ups', this.power_ups)
         }
     }
-
     start(){
         setInterval(()=>{
             this.generatePowerUp()
-        },15000)
+        },3000)
+
+        setInterval(()=>{
+            let back_players = Object.values(this.players)
+            back_players.forEach(player => {
+                player.energyRegen()
+            })
+        }, 3000)
 
         this.gameLoop =  setInterval(() => {
             this.frame()
@@ -135,47 +177,15 @@ export default class GameServer{
             this.io.emit('updateSpells', this.spells)
         }, 30)
     }
-
     getPlayer(socket_id){
         return this.players[socket_id]
     }
-    hitPlayer(socket_id, hit_socked_id, damage_source_angle, damage = 10){
-        let hit_player = this.getPlayer(hit_socked_id)
-        if(hit_player.isDead()) return
-
-        let player = this.getPlayer(socket_id)
-        damage = damage + player.power
-        if(hit_player.armour > 0 && hit_player.in_block && Functions.checkAngleDiffForBlock(hit_player.angle, damage_source_angle)){
-            if(hit_player.move_back){
-                damage -= 2
-            }
-            if(damage < 0) damage = 0
-            hit_player.armour -= damage
-            if(hit_player.armour >= 0){
-                this.io.to(socket_id).emit('modal', {
-                    color: 'yellow',
-                    value: 'Block!'
-                } )
-                return
-            }
-
-            damage = hit_player.armour * -1
-            hit_player.armour = 0
-        }
-
-        hit_player.hp -= damage
-        if(hit_player.hp <= 0){
-            hit_player.state = 4
-            player.kills ++
-            this.io.to(hit_socked_id).emit('dead')
-            this.io.sockets.emit('update_leaderboard', this.players)
-        }
+    createModal(socket_id, color, text){
         this.io.to(socket_id).emit('modal', {
-            color: 'red',
-            value: damage
+            color: color,
+            value: text
         } )
     }
-
     frame(){
         let back_players = Object.values(this.players)
 
@@ -194,15 +204,16 @@ export default class GameServer{
 
                 if(b_player.isDead()) continue
 
-                let hit = Math.sqrt(Math.pow(arrow.x- b_player.x, 2) + Math.pow( arrow.y - b_player.y, 2)) < 0.3
+                let hit = Math.sqrt(Math.pow(arrow.x- b_player.x, 2) + Math.pow( arrow.y - b_player.y, 2)) < Player.RADIUS
                 if(hit){
                     this.io.sockets.emit('delete_sprite', arrow.id);
-                    this.hitPlayer(arrow.owner_id, b_player.socket_id, arrow.angle)
+                    let player = this.getPlayer(arrow.owner_id)
+                    b_player.spellHit(this, player, 20 + player.power, arrow.angle)
                     this.arrows = this.arrows.filter(elem => elem !== arrow)
                 }
             }
-            arrow.x += Math.cos(Functions.degreeToRadians(arrow.angle)) * 0.3
-            arrow.y += Math.sin(Functions.degreeToRadians(arrow.angle)) * 0.3
+            arrow.x += Math.cos(Functions.degreeToRadians(arrow.angle)) * 0.25
+            arrow.y += Math.sin(Functions.degreeToRadians(arrow.angle)) * 0.25
         }
         for(let i = 0; i < this.power_ups.length; i++){
             let power_up = this.power_ups[i]
@@ -215,9 +226,8 @@ export default class GameServer{
 
                 let hit = Math.sqrt(Math.pow(power_up.x - b_player.x, 2) + Math.pow( power_up.y - b_player.y, 2)) < 0.3
                 if(hit){
-                    power_up.pickUp(b_player)
+                    power_up.pickUp(b_player, this.io)
                     this.power_ups = this.power_ups.filter(elem => elem !== power_up)
-                    this.io.sockets.to(b_player.socket_id).emit('update_spell', b_player.spell)
                     this.io.sockets.emit('delete_sprite', power_up.id);
                 }
             }
