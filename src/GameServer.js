@@ -16,8 +16,9 @@ export default class GameServer{
     getRoleForNewPlayer(){
         return this.players_count >= this.MAX_PLAYERS ? 'spec' : 'player'
     }
-    addNewPlayer(nick, skin, socket_id){
-        let player = new Player(socket_id, nick, skin)
+    addNewPlayer(nick, skin, socket_id, weapon){
+        console.log(weapon)
+        let player = new Player(socket_id, nick, skin, weapon)
         player.calcPosition(this.map, this.players)
         this.players[socket_id] = player
         return player
@@ -36,8 +37,8 @@ export default class GameServer{
                 socket.emit('set_role', role, socket.id)
             })
 
-            socket.on('init', (nick, skin)=>{
-                let player = this.addNewPlayer(nick, skin, socket.id)
+            socket.on('init', (nick, skin, weapon)=>{
+                let player = this.addNewPlayer(nick, skin, socket.id, weapon)
                 this.io.sockets.emit('update_leaderboard', this.players)
                 this.io.sockets.emit('update_log', nick + ' joined to the game')
                 socket.emit('update_map', this.map)

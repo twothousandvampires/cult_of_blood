@@ -13,6 +13,7 @@ export default class Player{
     static DEFAULT_MIN_DISTANCE = 1
     static DEFAULT_MAX_DISTANCE = 5
     static WEAPON_SWORD = 1
+    static WEAPON_STAFF = 2
     constructor(socket_id, nick, skin, weapon = Player.WEAPON_SWORD) {
         this.radius = 0.2
         this.socket_id = socket_id
@@ -212,6 +213,9 @@ export default class Player{
     }
     getWeaponDamage(){
         switch (this.weapon){
+            case Player.WEAPON_SWORD:
+                return 12 + Math.round(this.power) / 2
+                break
             case Player.WEAPON_SWORD:
                 return 12 + Math.round(this.power) / 2
                 break
