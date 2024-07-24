@@ -8,6 +8,6 @@ export default class ArrowPowerUp extends PowerUp{
     }
 
     pickUp(player){
-        player.ammo += 10
+        player.ammo += 5
     }
 }

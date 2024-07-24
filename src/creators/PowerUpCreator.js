@@ -12,11 +12,11 @@ import FireballPowerUp from "../power_ups/FIreballPowerUp.js";
 export default class PowerUpCreator{
     static PU_LIST = [
         'ball_lightning_pu',
-        // 'arrow_pu',
-        // 'armour_pu',
-        // 'speed_pu',
-        // 'life_pu',
-        // 'power_pu',
+        'arrow_pu',
+        'armour_pu',
+        'speed_pu',
+        'life_pu',
+        'power_pu',
         'dark_skull_pu',
         'rail_lightning',
         'ice_shard',

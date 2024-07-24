@@ -4,16 +4,9 @@ export default class DarkSkullSpell{
     constructor() {
         this.client_img_path = './sprites/game/Spell_Toxic_Cloud.gif'
         this.cd = 2000
-        this.energy_cost = 35
-        this.special_cost = 1
+        this.energy_cost = 25
+        this.special_cost = 50
         this.special_cd = 6000
-    }
-    isEnoughEnergy(player){
-        return player.energy >= this.energy_cost
-    }
-
-    isSpecialEnoughEnergy(player){
-        return player.energy >= this.special_cost
     }
 
     special(game, player){
@@ -21,9 +14,8 @@ export default class DarkSkullSpell{
         game.spells.push(this.getBigSkull(player.angle, player.x, player.y, player, this.getSkull))
     }
 
-
     cast(game, player){
-
+        player.energy -= this.energy_cost
         let start_angle = player.angle - 25
         let angle_step = 10
 

@@ -8,7 +8,7 @@ export default class LightningRailSpell{
         this.chain = 4
         this.damage = 199
         this.energy_cost = 35
-        this.special_cost = 1
+        this.special_cost = 55
     }
     createRay(game, player, chain = false){
         let angle =  player.angle
@@ -57,13 +57,7 @@ export default class LightningRailSpell{
             this.chainRail(this.chain, game, angle, player, x_col, ray)
         }
     }
-    isEnoughEnergy(player){
-        return player.energy >= this.energy_cost
-    }
 
-    isSpecialEnoughEnergy(player){
-        return player.energy >= this.special_cost
-    }
     cast(game, player){
         player.energy -= this.energy_cost
         this.createRay(game, player)

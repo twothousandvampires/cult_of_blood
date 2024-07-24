@@ -8,6 +8,6 @@ export default class SpeedPowerUp extends PowerUp{
     }
 
     pickUp(player){
-        player.movement_speed += 0.005
+        player.movement_speed += 0.01
     }
 }

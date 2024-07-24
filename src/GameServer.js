@@ -146,6 +146,10 @@ export default class GameServer{
     }
     generatePowerUp(){
         if(this.power_ups.length < this.map.power_up_spots.length){
+            if(this.stop_to_create_power_up){
+                this.stop_to_create_power_up = false
+                return;
+            }
             let spot = this.map.getPossiblePowerUpSpot(this.power_ups)
 
             let power_up = PowerUpCreator.createRandom()
@@ -157,13 +161,13 @@ export default class GameServer{
 
             this.io.sockets.emit('update_power_ups', this.power_ups)
         }
+        else {
+            this.stop_to_create_power_up = true
+        }
     }
     start(){
         setInterval(()=>{
             this.generatePowerUp()
-        },3000)
-
-        setInterval(()=>{
             let back_players = Object.values(this.players)
             back_players.forEach(player => {
                 player.energyRegen()
@@ -208,7 +212,7 @@ export default class GameServer{
                 if(hit){
                     this.io.sockets.emit('delete_sprite', arrow.id);
                     let player = this.getPlayer(arrow.owner_id)
-                    b_player.spellHit(this, player, 20 + player.power, arrow.angle)
+                    b_player.spellHit(this, player, Math.round(18 + Math.random() * (30 - 18)) + player.power, arrow.angle)
                     this.arrows = this.arrows.filter(elem => elem !== arrow)
                 }
             }
