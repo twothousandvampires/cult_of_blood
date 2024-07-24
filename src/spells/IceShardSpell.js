@@ -1,8 +1,8 @@
 import Functions from "../Functions.js";
 export default class IceShardSpell{
     constructor() {
-        this.energy_cost = 2
-        this.special_cost = 6
+        this.energy_cost = 10
+        this.special_cost = 15
         this.client_img_path = './sprites/game/Spell_Cold_Beam.gif'
         this.cd = 1200
         this.special_cd = 2000
@@ -21,15 +21,6 @@ export default class IceShardSpell{
         spells.push(shard)
         this.count ++
     }
-
-    isEnoughEnergy(player){
-        return player.energy >= this.energy_cost
-    }
-
-    isSpecialEnoughEnergy(player){
-        return player.energy >= this.special_cost
-    }
-
     special(game, player){
         player.energy -= this.special_cost
 

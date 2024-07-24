@@ -28,7 +28,7 @@ export default class Player{
         this.in_block = false
         this.movement_speed = 0.04
         this.energy = 100
-        this.ammo = 10
+        this.ammo = 5
         this.move_back = false
         this.kills = 0
         this.power = 0
@@ -99,6 +99,7 @@ export default class Player{
     }
     newSpell(spell){
         this.spell = spell
+        this.is_special = false
     }
     isDead(){
         return this.state === Player.STATE_DEAD
@@ -143,19 +144,23 @@ export default class Player{
     }
     specialCast(game){
         if(!this.spell) return
-        if(!this.spell.isSpecialEnoughEnergy(this)) return
+        if(!this.isEnoughEnergy(this.spell.special_cost)) return
 
         this.spell.special(game, this)
     }
 
     energyRegen(){
-        this.energy += 3
+        this.energy += 10
         if(this.energy > 100) this.energy = 100
+    }
+
+    isEnoughEnergy(energy){
+        return this.energy >= energy
     }
 
     cast(game){
         if(!this.spell) return
-        if(!this.spell.isEnoughEnergy(this)) return
+        if(!this.isEnoughEnergy(this.spell.energy_cost)) return
 
         this.spell.cast(game, this)
     }
@@ -214,7 +219,7 @@ export default class Player{
     getWeaponDamage(){
         switch (this.weapon){
             case Player.WEAPON_SWORD:
-                return 12 + Math.round(this.power) / 2
+                return Math.round(10 + Math.random() * (16 - 10)) + (Math.round(this.power) / 2)
                 break
             case Player.WEAPON_SWORD:
                 return 12 + Math.round(this.power) / 2

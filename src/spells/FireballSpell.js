@@ -15,13 +15,6 @@ export default class FireballSpell {
         this.light_radius = 2
     }
 
-    isEnoughEnergy(player){
-        return player.energy >= this.energy_cost
-    }
-
-    isSpecialEnoughEnergy(player){
-        return player.energy >= this.special_cost
-    }
     special_end(game){
         if(this.ball){
             this.ball.direct = true
@@ -58,6 +51,7 @@ export default class FireballSpell {
             damage_radius: 0.5,
             radius: 0.1,
             hit: [],
+            timeout: false,
             explosion: function (game){
                 let back_players = Object.values(game.players)
                 for(let i = 0; i < back_players.length; i++){
@@ -97,6 +91,14 @@ export default class FireballSpell {
                     this.y += Math.sin(Functions.degreeToRadians(this.angle)) * this.speed
                 }
                 else {
+                    if(!this.timeout){
+                        this.timeout = true
+                        setTimeout(()=>{
+                            this.explosion(game)
+                            game.spells = game.spells.filter(elem => elem !== this)
+                            game.io.sockets.emit('delete_sprite', this.id);
+                        }, 8000)
+                    }
                     this.angle = player.angle
                     this.x = player.x + Math.cos(Functions.degreeToRadians(this.angle)) / 2
                     this.y = player.y + Math.sin(Functions.degreeToRadians(this.angle)) / 2

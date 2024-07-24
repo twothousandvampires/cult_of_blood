@@ -2,7 +2,7 @@ import Functions from "../Functions.js";
 export default class LightningBoltSpell{
     constructor() {
         this.energy_cost = 2
-        this.special_cost = 6
+        this.special_cost = 4
         this.client_img_path = './sprites/game/Spell_Static_Charge.gif'
         this.cd = 250
         this.special_cd = 150
@@ -11,14 +11,6 @@ export default class LightningBoltSpell{
     cast({ spells }, player){
         player.energy -= this.energy_cost
         spells.push(this.getProj(player))
-    }
-
-    isEnoughEnergy(player){
-        return player.energy >= this.energy_cost
-    }
-
-    isSpecialEnoughEnergy(player){
-        return player.energy >= this.special_cost
     }
 
     special({ spells }, player){
