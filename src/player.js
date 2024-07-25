@@ -33,11 +33,17 @@ export default class Player{
         this.kills = 0
         this.power = 0
         this.game_state = Player.GAME_STATE_WEAPON
-        this.weapon = weapon
+        this.weapon = +weapon
         this.change_state_cd = false
         this.is_special = false
         this.min_distance = Player.DEFAULT_MIN_DISTANCE
         this.max_distance = Player.DEFAULT_MAX_DISTANCE
+        this.energy_regen = 2
+        this.is_invulnerable = false
+        this.is_invisible = false
+        if(this.weapon == 2){
+            this.is_invisible = true
+        }
     }
     revive(map, players){
         this.state = Player.STATE_IDLE
@@ -104,6 +110,12 @@ export default class Player{
     isDead(){
         return this.state === Player.STATE_DEAD
     }
+    isInvulnerable(){
+        return this.is_invulnerable
+    }
+    isInvisible(){
+        return this.is_invisible
+    }
     startSpecial(){
         if(this.is_special) return
 
@@ -116,6 +128,9 @@ export default class Player{
                 case Player.WEAPON_SWORD:
                     this.in_block = true
                     this.movement_speed -= 0.02
+                    break
+                case Player.WEAPON_STAFF:
+                    this.energy_regen += 5
                     break
             }
         }
@@ -139,6 +154,9 @@ export default class Player{
                     this.in_block = false
                     this.movement_speed += 0.02
                     break
+                case Player.WEAPON_STAFF:
+                    this.energy_regen -= 5
+                    break
             }
         }
     }
@@ -150,7 +168,7 @@ export default class Player{
     }
 
     energyRegen(){
-        this.energy += 10
+        this.energy += this.energy_regen
         if(this.energy > 100) this.energy = 100
     }
 
@@ -220,17 +238,19 @@ export default class Player{
         switch (this.weapon){
             case Player.WEAPON_SWORD:
                 return Math.round(10 + Math.random() * (16 - 10)) + (Math.round(this.power) / 2)
-                break
-            case Player.WEAPON_SWORD:
-                return 12 + Math.round(this.power) / 2
-                break
+            case Player.WEAPON_STAFF:
+                return Math.round(10 + Math.random() * (22 - 10)) + (Math.round(this.power) / 2)
         }
     }
 
     weaponHit(game, player){
         if(this.isDead()) return
+        if(this.isInvisible()){
+            this.is_invisible = false
+        }
         // todo add player power
         let damage = player.getWeaponDamage()
+
         let angle = player.angle
         let weapon = player.weapon
 
@@ -262,13 +282,17 @@ export default class Player{
 
             let p_nick = game.getPlayer(player.socket_id).nick
             game.io.sockets.emit('update_log', p_nick + ' killed ' + this.nick)
+            game.createBloodOfferingPowerUp(this)
         }
     }
 
     spellHit(game, player, damage, angle){
         if(this.isDead()) return
+        if(this.isInvulnerable()) return
 
-        damage = damage
+        if(this.isInvisible()){
+            this.is_invisible = false
+        }
 
         if(this.energy > 0 && this.in_block && Functions.checkAngleDiffForBlock(this.angle, angle)){
 
@@ -293,6 +317,7 @@ export default class Player{
 
             let p_nick = game.getPlayer(player.socket_id).nick
             game.io.sockets.emit('update_log', p_nick + ' killed ' + this.nick)
+            game.createBloodOfferingPowerUp(this)
         }
     }
 }

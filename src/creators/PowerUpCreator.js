@@ -8,6 +8,7 @@ import RailLightningPowerUp from "../power_ups/RailLightningPowerUp.js";
 import IceShardPowerUp from "../power_ups/IceShardPowerUp.js";
 import ArmourPowerUp from "../power_ups/ArmourPowerUp.js";
 import FireballPowerUp from "../power_ups/FIreballPowerUp.js";
+import BloodOfferingPowerUp from "../power_ups/BloodOfferingPowerUp.js";
 
 export default class PowerUpCreator{
     static PU_LIST = [
@@ -44,6 +45,8 @@ export default class PowerUpCreator{
                 return new IceShardPowerUp()
             case 'fireball_pu':
                 return new FireballPowerUp()
+            case 'blood_offering':
+                return new BloodOfferingPowerUp()
         }
     }
 

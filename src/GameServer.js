@@ -16,8 +16,17 @@ export default class GameServer{
     getRoleForNewPlayer(){
         return this.players_count >= this.MAX_PLAYERS ? 'spec' : 'player'
     }
+    createBloodOfferingPowerUp(player){
+        let power_up = PowerUpCreator.create('blood_offering')
+        if(!power_up) return
+
+        power_up.setCords(player.x, player.y)
+
+        this.power_ups.push(power_up)
+
+        this.io.sockets.emit('update_power_ups', this.power_ups)
+    }
     addNewPlayer(nick, skin, socket_id, weapon){
-        console.log(weapon)
         let player = new Player(socket_id, nick, skin, weapon)
         player.calcPosition(this.map, this.players)
         this.players[socket_id] = player
@@ -49,7 +58,7 @@ export default class GameServer{
             socket.on('hit_player', (socket_id) => {
                 let player_to_hit = this.getPlayer(socket_id)
                 let player = this.getPlayer(socket.id)
-                if(player && player_to_hit){
+                if(player && player_to_hit && !player_to_hit.isInvulnerable()){
                     player_to_hit.weaponHit(this, player)
                 }
             })
@@ -210,7 +219,7 @@ export default class GameServer{
                 if(b_player.isDead()) continue
 
                 let hit = Math.sqrt(Math.pow(arrow.x- b_player.x, 2) + Math.pow( arrow.y - b_player.y, 2)) < Player.RADIUS
-                if(hit){
+                if(hit && !b_player.isInvulnerable()){
                     this.io.sockets.emit('delete_sprite', arrow.id);
                     let player = this.getPlayer(arrow.owner_id)
                     b_player.spellHit(this, player, Math.round(18 + Math.random() * (30 - 18)) + player.power, arrow.angle)
