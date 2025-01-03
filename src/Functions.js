@@ -7,6 +7,11 @@ export default class Functions{
         let diff = Math.abs(one - two)
         return diff > 112.5 && diff < 247.5
     }
+    static checkAngleDiffForAmbush(one, two){
+        let diff = Math.abs(one - two)
+        console.log(diff)
+        return diff > 292.5 || diff < 67.6
+    }
     static getAnglePoints(x1, y1, x2, y2, x3, y3)
     {
         return (Math.atan2(y3 - y1, x3 - x1) - Math.atan2(y2 - y1, x2 - x1)) * 180 / Math.PI;

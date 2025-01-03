@@ -9,6 +9,7 @@ import IceShardPowerUp from "../power_ups/IceShardPowerUp.js";
 import ArmourPowerUp from "../power_ups/ArmourPowerUp.js";
 import FireballPowerUp from "../power_ups/FIreballPowerUp.js";
 import BloodOfferingPowerUp from "../power_ups/BloodOfferingPowerUp.js";
+import BlessPowerUp from "../power_ups/BlessPowerUp.js";
 
 export default class PowerUpCreator{
     static PU_LIST = [
@@ -47,6 +48,8 @@ export default class PowerUpCreator{
                 return new FireballPowerUp()
             case 'blood_offering':
                 return new BloodOfferingPowerUp()
+            case 'bless_pu':
+                return new BlessPowerUp()
         }
     }
 
@@ -54,8 +57,8 @@ export default class PowerUpCreator{
         return PowerUpCreator.PU_LIST[Math.floor(Math.random() * PowerUpCreator.PU_LIST.length)]
     }
 
-    static createRandom(){
+    static createRandom(game){
         let r_name = PowerUpCreator.getPuNameRandom()
-        return PowerUpCreator.create(r_name)
+        return PowerUpCreator.create(r_name, game)
     }
 }

@@ -1,10 +1,10 @@
 import {createRequire} from "module";
 import GameServer from "./src/GameServer.js";
 
-const require = createRequire(import.meta.url);
-const http = require("http");
+const create_require = createRequire(import.meta.url);
+const http = create_require("http");
 
-const { Server } = require("socket.io");
+const { Server } = create_require("socket.io");
 
 const port = 9001;
 

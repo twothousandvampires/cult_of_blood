@@ -12,12 +12,28 @@ export default class GameServer{
         this.spells = []
         this.power_ups = []
         this.map = new Garden()
+        this.beast_is_spawned = false
+    }
+    beastDead(){
+        this.beast_is_spawned = false
+        let back_players = Object.values(this.players)
+        back_players.forEach(elem => {
+            elem.blessed = false
+        })
+    }
+    clearPowerUps(){
+        this.power_ups.forEach(elem => {
+            this.io.sockets.emit('delete_sprite', elem.id);
+        })
+        this.power_ups = []
     }
     getRoleForNewPlayer(){
         return this.players_count >= this.MAX_PLAYERS ? 'spec' : 'player'
     }
     createBloodOfferingPowerUp(player){
-        let power_up = PowerUpCreator.create('blood_offering')
+        if(this.beast_is_spawned) return
+
+        let power_up = PowerUpCreator.create('blood_offering', this)
         if(!power_up) return
 
         power_up.setCords(player.x, player.y)
@@ -37,6 +53,10 @@ export default class GameServer{
         let player = this.getPlayer(socket_id)
         if(!player) return
 
+        if(player.is_beast){
+            this.beastDead()
+        }
+
         delete this.players[socket_id]
     }
     init(){
@@ -55,10 +75,17 @@ export default class GameServer{
                 socket.emit('set_weapon_mode', player.weapon)
             })
 
+            socket.on('hand_attack', () => {
+                let player = this.getPlayer(socket.id)
+                if(player){
+                    player.handAttack(this)
+                }
+            })
+
             socket.on('hit_player', (socket_id) => {
                 let player_to_hit = this.getPlayer(socket_id)
                 let player = this.getPlayer(socket.id)
-                if(player && player_to_hit && !player_to_hit.isInvulnerable()){
+                if(player && player_to_hit){
                     player_to_hit.weaponHit(this, player)
                 }
             })
@@ -81,6 +108,10 @@ export default class GameServer{
                 if (!player) return
 
                 player.is_attack = true
+                if(player.is_invisible){
+                    player.is_invisible = false
+                    player.movement_speed += 0.02
+                }
             })
 
             socket.on('start_special', () => {
@@ -131,16 +162,7 @@ export default class GameServer{
                 const player = this.getPlayer(socket.id)
 
                 if(!player) return
-                if(player.ammo <= 0) return
-
-                player.ammo --
-                this.arrows.push({
-                    x: player.x,
-                    y: player.y,
-                    angle: player.angle,
-                    id: 'a' + Math.floor(Math.random() * 1000000),
-                    owner_id: socket.id
-                })
+                player.e(this)
             })
 
             socket.on('cast', () => {
@@ -162,7 +184,7 @@ export default class GameServer{
             }
             let spot = this.map.getPossiblePowerUpSpot(this.power_ups)
 
-            let power_up = PowerUpCreator.createRandom()
+            let power_up = !this.beast_is_spawned ? PowerUpCreator.createRandom(this) : PowerUpCreator.create('bless_pu')
             if(!power_up || !spot) return
 
             power_up.setCords(spot.x, spot.y)
@@ -180,7 +202,7 @@ export default class GameServer{
             this.generatePowerUp()
             let back_players = Object.values(this.players)
             back_players.forEach(player => {
-                player.energyRegen()
+                player.energyRegen(this)
             })
         }, 3000)
 
@@ -206,7 +228,7 @@ export default class GameServer{
         for(let i = 0; i < this.arrows.length; i++){
             let arrow = this.arrows[i]
             let layout = this.map.getLayout()
-            if(layout[Math.floor(arrow.y)][Math.floor(arrow.x)] !== 0){
+            if(this.map.unmoveble.includes(layout[Math.floor(arrow.y)][Math.floor(arrow.x)])){
                 this.arrows = this.arrows.filter(elem => elem !== arrow)
                 this.io.sockets.emit('delete_sprite', arrow.id);
             }
@@ -219,7 +241,7 @@ export default class GameServer{
                 if(b_player.isDead()) continue
 
                 let hit = Math.sqrt(Math.pow(arrow.x- b_player.x, 2) + Math.pow( arrow.y - b_player.y, 2)) < Player.RADIUS
-                if(hit && !b_player.isInvulnerable()){
+                if(hit && !b_player.isInvulnerable()) {
                     this.io.sockets.emit('delete_sprite', arrow.id);
                     let player = this.getPlayer(arrow.owner_id)
                     b_player.spellHit(this, player, Math.round(18 + Math.random() * (30 - 18)) + player.power, arrow.angle)
@@ -240,7 +262,7 @@ export default class GameServer{
 
                 let hit = Math.sqrt(Math.pow(power_up.x - b_player.x, 2) + Math.pow( power_up.y - b_player.y, 2)) < 0.3
                 if(hit){
-                    power_up.pickUp(b_player, this.io)
+                    power_up.pickUp(b_player, this.io, this)
                     this.power_ups = this.power_ups.filter(elem => elem !== power_up)
                     this.io.sockets.emit('delete_sprite', power_up.id);
                 }

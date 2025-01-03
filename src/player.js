@@ -1,19 +1,25 @@
 import Functions from "./Functions.js";
-import e from "express";
 
 export default class Player{
-
+    static degreeToRadians(degree){
+        let pi = Math.PI;
+        return degree * pi / 180;
+    }
     static RADIUS = 0.15
     static STATE_DEAD = 4
     static STATE_IDLE = 1
     static STATE_MOVE = 2
     static GAME_STATE_WEAPON = 1
+    static GAME_STATE_BEAST = 3
     static GAME_STATE_CASTING = 2
 
     static DEFAULT_MIN_DISTANCE = 1
     static DEFAULT_MAX_DISTANCE = 5
     static WEAPON_SWORD = 1
     static WEAPON_STAFF = 2
+    static WEAPON_DAGGER = 3
+    static WEAPON_HAND = 4
+
     constructor(socket_id, nick, skin, weapon = Player.WEAPON_SWORD) {
         this.radius = 0.2
         this.socket_id = socket_id
@@ -41,9 +47,8 @@ export default class Player{
         this.energy_regen = 2
         this.is_invulnerable = false
         this.is_invisible = false
-        if(this.weapon == 2){
-            this.is_invisible = true
-        }
+        this.blood_offering_count = 0
+        this.blessed = false
     }
     revive(map, players){
         this.state = Player.STATE_IDLE
@@ -57,12 +62,15 @@ export default class Player{
         this.move_back = false
         this.power = 0
         this.is_special = false
+        this.shield = 0
+
         this.calcPosition(map, players)
     }
     changeGameState(socket){
         if(this.change_state_cd) return
-        if(this.game_state === Player.GAME_STATE_WEAPON && !this.spell) return;
-        if(this.is_special) return;
+        if(this.game_state === Player.GAME_STATE_WEAPON && !this.spell) return
+        if(this.is_special) return
+        if(this.is_beast) return
 
         if(this.game_state === Player.GAME_STATE_WEAPON){
             this.game_state = Player.GAME_STATE_CASTING
@@ -124,24 +132,30 @@ export default class Player{
 
         }
         else {
-            switch (this.weapon){
-                case Player.WEAPON_SWORD:
-                    this.in_block = true
-                    this.movement_speed -= 0.02
-                    break
-                case Player.WEAPON_STAFF:
-                    this.energy_regen += 5
-                    break
+            if(this.is_beast){
+                this.movement_speed += 0.08
+                this.direction_angle = this.angle
+            }
+            else {
+                switch (this.weapon){
+                    case Player.WEAPON_SWORD:
+                        this.in_block = true
+                        this.movement_speed -= 0.02
+                        break
+                    case Player.WEAPON_STAFF:
+                        this.energy_regen += 5
+                        break
+                }
             }
         }
     }
-
+    reduceEnergy(amount){
+        this.energy -= amount
+    }
     endSpecial(game){
         if(!this.is_special) return
 
         this.is_special = false
-
-
 
         if(this.game_state === Player.GAME_STATE_CASTING){
             if(this.spell.special_end !== undefined){
@@ -149,14 +163,37 @@ export default class Player{
             }
         }
         else {
-            switch (this.weapon){
-                case Player.WEAPON_SWORD:
-                    this.in_block = false
-                    this.movement_speed += 0.02
-                    break
-                case Player.WEAPON_STAFF:
-                    this.energy_regen -= 5
-                    break
+            if(this.is_beast){
+                this.movement_speed -= 0.08
+                this.direction_angle = undefined
+            }
+            else {
+                switch (this.weapon){
+                    case Player.WEAPON_SWORD:
+                        this.in_block = false
+                        this.movement_speed += 0.02
+                        break
+                    case Player.WEAPON_STAFF:
+                        this.energy_regen -= 5
+                        break
+                    case Player.WEAPON_DAGGER:
+                        if(this.isEnoughEnergy(70)){
+                            this.reduceEnergy(70)
+                            this.movement_speed -= 0.02
+                            this.is_invisible = true
+                        }
+                        break
+                    case Player.WEAPON_HAND:
+                        if(this.hp <= 1){
+                            return
+                        }
+                        this.hp -= 10
+                        if(this.hp < 0){
+                            this.hp = 1
+                        }
+                        this.power += 10
+                        break
+                }
             }
         }
     }
@@ -167,9 +204,16 @@ export default class Player{
         this.spell.special(game, this)
     }
 
-    energyRegen(){
+    energyRegen(game){
         this.energy += this.energy_regen
         if(this.energy > 100) this.energy = 100
+        if(this.is_beast){
+            this.hp -= 10
+            if(this.hp <= 0){
+                this.dead(game)
+                game.io.to(this.socket_id).emit('dead')
+            }
+        }
     }
 
     isEnoughEnergy(energy){
@@ -184,7 +228,12 @@ export default class Player{
     }
 
     update(d, game){
-        this.angle += d.da
+        if(this.cannot_action) return
+
+        if(!this.direction_angle){
+            this.angle += d.da
+        }
+
         if(this.angle > 360) this.angle -= 360
         if(this.angle < 0) this.angle += 360
 
@@ -200,12 +249,21 @@ export default class Player{
 
             let check_x = Math.sqrt(Math.pow(new_x - b_player.x, 2) + Math.pow( this.y - b_player.y, 2))
             let check_y = Math.sqrt(Math.pow(this.x - b_player.x, 2) + Math.pow(new_y - b_player.y, 2))
-
-            if(check_x <= Player.RADIUS * 2){
-                d.dx = 0
+            if(this.is_beast && this.is_special){
+                if((check_x <= Player.RADIUS * 2) || (check_y <= Player.RADIUS * 2)){
+                    b_player.weaponHit(game, this)
+                }
             }
-            if(check_y <= Player.RADIUS * 2){
-                d.dy = 0
+            else {
+                if(this.blessed && (!b_player.is_beast)){
+                    b_player.blessed = true
+                }
+                if(check_x <= Player.RADIUS * 2){
+                    d.dx = 0
+                }
+                if(check_y <= Player.RADIUS * 2){
+                    d.dy = 0
+                }
             }
         }
 
@@ -233,27 +291,168 @@ export default class Player{
 
         this.x += d.dx
         this.y += d.dy
+
+        let portals = game.map.portals
+
+        portals.forEach(portal => {
+            if(Functions.distance(this, portal) < 0.1 && portal.active){
+                let to = game.map.portals.find(elem => {
+                    return portal.destination === elem.index
+                })
+
+                to.active = false
+                portal.active = false
+                game.io.emit('update_portals', game.map.portals)
+
+                this.x = to.x
+                this.y = to.y
+
+                setTimeout(()=>{
+                    to.active = true
+                    portal.active = true
+                    game.io.emit('update_portals', game.map.portals)
+                }, 5000)
+            }
+        })
     }
     getWeaponDamage(){
+        if(this.is_beast){
+            return Math.round(50 + Math.random() * (70 - 50)) + (Math.round(this.power))
+        }
         switch (this.weapon){
             case Player.WEAPON_SWORD:
-                return Math.round(10 + Math.random() * (16 - 10)) + (Math.round(this.power) / 2)
+                return Math.round(15 + Math.random() * (25 - 15)) + (Math.round(this.power) / 2)
             case Player.WEAPON_STAFF:
-                return Math.round(10 + Math.random() * (22 - 10)) + (Math.round(this.power) / 2)
+                return Math.round(20 + Math.random() * (30 - 20)) + (Math.round(this.power) / 2)
+            case Player.WEAPON_DAGGER:
+                return Math.round(20 + Math.random() * (30 - 20)) + (Math.round(this.power) / 2)
+            case Player.WEAPON_HAND:
+                return Math.round(20 + Math.random() * (30 - 20)) + (Math.round(this.power) / 2)
+
         }
     }
+    e(game){
+        switch (this.weapon){
+            case Player.WEAPON_HAND:
+                let players = Object.values(game.players)
+                for(let i = 0; i < players.length; i++){
+                    if(Functions.distance(this, players[i]) < 0.7 && players[i].state === Player.STATE_DEAD){
+                        this.shield = 3
+                        game.io.to(this.socket_id).emit('set_corpse')
+                        return;
+                    }
+                }
+                break
+            case Player.WEAPON_SWORD:
+                if(this.ammo <= 0) return
+                if(this.is_beast){
+                    return
+                }
+                this.ammo --
+                game.arrows.push({
+                    x: this.x,
+                    y: this.y,
+                    angle: this.angle,
+                    id: 'a' + Math.floor(Math.random() * 1000000),
+                    owner_id: this.socket_id
+                })
+                break
+            default:
+                return
+        }
+    }
+    TransformIntoBeast(socket){
+        socket.to(this.socket_id).emit('set_transform_mode')
+        this.cannot_action = true
+        this.is_beast = true
+        this.movement_speed = 0.08
+        this.hp = 200
 
+        setTimeout(()=>{
+            socket.to(this.socket_id).emit('set_beast_mode')
+            this.previous_texture_id = this.texture_id
+            this.texture_id = 'vampire'
+            socket.emit('set_texture_id', this.socket_id, this.texture_id)
+            this.cannot_action = false
+        },2000)
+    }
+    handAttack(game){
+        let player = this
+        game.spells.push({
+            player: player,
+            radius: 0.15,
+            damage: 10,
+            speed: 0.1,
+            x: this.x,
+            y: this.y,
+            angle: this.angle,
+            id: 'spell' + Math.floor(Math.random() * 1000000),
+            texture_id: 'necro_skull',
+            owner_s_id: this.socket_id,
+            act: function (game) {
+                let layout = game.map.getLayout()
+
+                if (layout[Math.floor(this.y)][Math.floor(this.x)] !== 0) {
+                    game.spells = game.spells.filter(elem => elem !== this)
+                    game.io.sockets.emit('delete_sprite', this.id);
+                    return
+                }
+                let back_players = Object.values(game.players)
+
+                for (let i = 0; i < back_players.length; i++) {
+                    if (back_players[i].isDead()) continue
+                    if (back_players[i].socket_id === player.socket_id) continue
+
+                    let hit = Math.sqrt(Math.pow(this.x - back_players[i].x, 2) + Math.pow(this.y - back_players[i].y, 2)) < (back_players[i].radius + this.radius)
+                    if (hit) {
+                        let d = this.damage + (player.power * 2)
+                        back_players[i].spellHit(game, player, d, this.angle)
+                        game.spells = game.spells.filter(elem => elem !== this)
+                        this.player.hp += Math.round(d/2)
+                        game.io.sockets.emit('delete_sprite', this.id);
+                    }
+                }
+
+                this.x += Math.cos(Functions.degreeToRadians(this.angle)) * this.speed
+                this.y += Math.sin(Functions.degreeToRadians(this.angle)) * this.speed
+            }
+        })
+    }
+    checkShield(angle, game){
+        if(this.shield && Functions.checkAngleDiffForBlock(this.angle, angle)){
+            this.shield --
+            if(this.shield == 0){
+                game.io.to(this.socket_id).emit('delete_corpse')
+            }
+            return true
+        }
+        return false
+    }
     weaponHit(game, player){
         if(this.isDead()) return
+        if(this.isInvulnerable()) return
+        if(this.is_beast && !player.blessed) return;
+        if(game.beast_is_spawned && !player.is_beast && !this.is_beast){
+            return
+        }
+
         if(this.isInvisible()){
             this.is_invisible = false
+            this.movement_speed += 0.02
         }
+
         // todo add player power
         let damage = player.getWeaponDamage()
 
         let angle = player.angle
-        let weapon = player.weapon
 
+        if(this.checkShield(angle, game)){
+            return
+        }
+
+        if(player.weapon === Player.WEAPON_DAGGER && Functions.checkAngleDiffForAmbush(this.angle, angle)){
+            damage *= 4
+        }
 
         if(this.energy > 0 && this.in_block && Functions.checkAngleDiffForBlock(this.angle, angle)){
 
@@ -273,9 +472,13 @@ export default class Player{
 
         this.hp -= damage
         if(this.hp <= 0){
-            this.state = Player.STATE_DEAD
+            this.dead(game)
+
             if(player.socket_id !== this.socket_id){
-                player.kills ++
+                player.kills += this.is_beast ? 5 : 1
+            }
+            if(player.is_beast){
+                player.hp += 20
             }
             game.io.to(this.socket_id).emit('dead')
             game.io.sockets.emit('update_leaderboard', game.players)
@@ -285,13 +488,37 @@ export default class Player{
             game.createBloodOfferingPowerUp(this)
         }
     }
-
+    dead(game){
+        this.state = Player.STATE_DEAD
+        this.blood_offering_count = 0
+        if(this.is_beast){
+            this.texture_id = this.previous_texture_id
+            this.is_beast = false
+            this.movement_speed = 0.04
+            this.hp = 100
+            game.beastDead()
+            game.io.to(this.socket_id).emit('set_weapon_mode', this.weapon)
+            game.io.sockets.emit('set_texture_id', this.socket_id, this.texture_id)
+        }
+    }
     spellHit(game, player, damage, angle){
         if(this.isDead()) return
+
         if(this.isInvulnerable()) return
+
+        if(this.is_beast && !player.blessed) return
+
+        if(this.checkShield(angle, game)){
+            return;
+        }
+
+        if(game.beast_is_spawned && !player.is_beast && !this.is_beast){
+            return
+        }
 
         if(this.isInvisible()){
             this.is_invisible = false
+            this.movement_speed += 0.02
         }
 
         if(this.energy > 0 && this.in_block && Functions.checkAngleDiffForBlock(this.angle, angle)){
@@ -308,9 +535,13 @@ export default class Player{
 
         this.hp -= damage
         if(this.hp <= 0){
-            this.state = Player.STATE_DEAD
+            this.dead(game)
+
             if(player.socket_id !== this.socket_id){
-                player.kills ++
+                player.kills += this.is_beast ? 5 : 1
+            }
+            if(player.is_beast){
+                player.hp += 20
             }
             game.io.to(this.socket_id).emit('dead')
             game.io.sockets.emit('update_leaderboard', game.players)

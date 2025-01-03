@@ -7,8 +7,16 @@ export default class BloodOfferingPowerUp extends PowerUp{
         this.texture_id = 'blood_offering_pu'
         this.id = 'pu' + Math.floor(Math.random() * 1000000)
     }
-    pickUp(player, io){
-        player.power ++
-        player.hp ++
+    pickUp(player, io, game){
+        player.blood_offering_count ++
+        if(player.blood_offering_count >= 1){
+            player.TransformIntoBeast(io)
+            game.beast_is_spawned = true
+            game.clearPowerUps()
+        }
+        else{
+            player.power ++
+            player.hp ++
+        }
     }
 }
